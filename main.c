@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include <math.h>
-#include <threads.h>
 
 struct Vector { float x; float y; } typedef Vector;
 
@@ -60,12 +59,12 @@ float initialDst = 1;
 
 void CheckBoundCollisions() {
   for (int i = 0; i < numParticles; i++) {
-    if (fabs(positions[i] -> x) >= (float) width / 2) {
+    if (positions[i] -> x >= (float) width / 2) {
       positions[i]  -> x = (float) width / 2 * GetSignal(positions[i] -> x);
       velocities[i] -> x *= -(1 - collDamping);
     }
     
-    if (fabs(positions[i] -> y) >= (float) height / 2) {
+    if (positions[i] -> y >= (float) height / 2) {
       positions[i]  -> y = (float) height / 2 * GetSignal(positions[i] -> y);
       velocities[i] -> y *= -(1 - collDamping);
     }
@@ -93,9 +92,9 @@ void Update() {
   memset(buffer, backgroundASCII, width * height);
 
   for (int i = 0; i < numParticles; i++) {
-    Sum(velocities[i], &(Vector){0, 200 * deltaTime} );
+    Sum(velocities[i], &(Vector){0, 200 * deltaTime} ); // Gravity acceleration
+   
     Vector* posVar = velocities[i]; 
-
     Mult(posVar, (double) deltaTime); 
     Sum(positions[i], posVar); 
 
@@ -105,8 +104,9 @@ void Update() {
     int bufferIdx = x + y * width;
     if (bufferIdx < 0 || bufferIdx > width * height) continue;
 
+    //if (i == 0) printf("%f\n", velocities[i] -> y);
     buffer[bufferIdx] = densityASCII[0];
-  }  
+  }
 
   CheckBoundCollisions();
 

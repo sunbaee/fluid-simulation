@@ -1,7 +1,7 @@
 all: main
 
 main: 
-	gcc -o .out main.c
+	gcc -o out main.c
 
 clear:
-	rm .out
+	rm out
