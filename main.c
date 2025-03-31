@@ -55,7 +55,7 @@ int GetSignal(int num) {
 #define PI 3.14159265358979323846
 
 // Simulation variables
-#define width  160 
+#define width  44//160 
 #define height 44 
 
 #define deltaTime 1. / 60
@@ -66,7 +66,8 @@ int GetSignal(int num) {
 #define smoothingLength 5 
 #define collDamping    .6
 #define velTolerance   10
-#define pressureMult    20
+#define pressureMult   20
+#define targetDensity   0
 
 Vector* gravity;
 
@@ -86,17 +87,22 @@ float initialDst = 1;
 
 void CheckBoundCollisions() {
   for (int i = 0; i < numParticles; i++) {
-    if (positions[i] -> x >= (float) width / 2 - 2) {
+    if (positions[i] -> x >= (float) width / 2) {
       if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
+
       float boundSignal = GetSignal(positions[i] -> x);
-      positions[i]  -> x = (float) width  / 2 * boundSignal - 2 * boundSignal;
-      velocities[i] -> x *= -(1 - collDamping);
+
+      positions[i]  -> x = (float) width / 2 * boundSignal;
+      velocities[i] -> x *= collDamping - 1;
     }
-    if (positions[i] -> y >= (float) height / 2 - 2) {
+
+    if (positions[i] -> y >= (float) height / 2) {
       if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
+
       float boundSignal = GetSignal(positions[i] -> y);
-      positions[i]  -> y = (float) height / 2 * boundSignal - 2 * boundSignal;
-      velocities[i] -> y *= -(1 - collDamping);
+
+      positions[i]  -> y = (float) height / 2 * boundSignal;
+      velocities[i] -> y *= collDamping - 1;
     }
   }
 }
@@ -145,9 +151,9 @@ Vector* CalculatePressure(int particleIndex) {
     Sum(pressureVector, positions[j]);
 
     float distance      = Mag(pressureVector);
-    float pressureForce = densities[particleIndex] - densities[j] / 2;
+    float pressureForce = (densities[particleIndex] - targetDensity) * pressureMult;
     
-    Mult(pressureVector, particleMass * pressureForce * pressureMult / (distance * densities[j]) * 
+    Mult(pressureVector, particleMass * pressureForce / (distance * densities[j]) * 
                          SmoothingKernelDer(distance, smoothingLength));
 
     Sum(totalPressure, pressureVector);
@@ -179,7 +185,7 @@ void Fluidify() {
 void Start() {
   printf("\x1b[2J");
 
-  gravity = NewVector(0, 0); Mult(gravity, deltaTime);
+  gravity = NewVector(0, 50); Mult(gravity, deltaTime);
 
   // Displaying particles in grid
   int side = sqrt(numParticles);
