@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <stdio.h>
 
 #include <stdbool.h>
@@ -6,16 +7,31 @@
 
 #include <math.h>
 
-struct Vector { float x; float y; } typedef Vector;
+struct Vector { double x; double y; } typedef Vector;
 
 // Vector constructor
-Vector* NewVector(float x, float y) {
+Vector* NewVector(double x, double y) {
   Vector* vector = (Vector*)malloc(sizeof(Vector));
 
   vector -> x = x;
   vector -> y = y;
 
   return vector;
+}
+
+// Returns memory copy of another vector
+Vector* CopyVector(Vector* vector) {
+  return NewVector(vector -> x, vector -> y);  
+}
+
+// Calculates magnitude squared of a vector
+float MagSqrd(Vector* vec) {
+  return pow(vec -> x, 2) + pow(vec -> y, 2);
+}
+
+// Calculates Magnitude of a vector
+float Mag(Vector* vec) {
+  return sqrt(MagSqrd(vec));
 }
 
 // Multiplies a vector for a scalar.
@@ -35,18 +51,29 @@ int GetSignal(int num) {
   return num > 0 ? 1 : -1;
 }
 
-// Simulation variables
-#define numParticles 100
+// Constant definitions
+#define PI 3.14159265358979323846
 
+// Simulation variables
 #define width  160 
 #define height 44 
 
-float deltaTime =  1. / 60;
-float collDamping = .2;
+#define deltaTime 1. / 60
+
+#define numParticles 100
+#define particleMass 1
+
+#define smoothingLength 5 
+#define collDamping    .6
+#define velTolerance   10
+#define pressureMult    20
+
+Vector* gravity;
 
 // Particle vectors
 Vector* positions[numParticles];
 Vector* velocities[numParticles];
+float densities[numParticles];
 
 // Buffer for drawing
 char buffer[width * height];
@@ -59,66 +86,146 @@ float initialDst = 1;
 
 void CheckBoundCollisions() {
   for (int i = 0; i < numParticles; i++) {
-    if (positions[i] -> x >= (float) width / 2) {
-      positions[i]  -> x = (float) width / 2 * GetSignal(positions[i] -> x);
+    if (positions[i] -> x >= (float) width / 2 - 2) {
+      if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
+      float boundSignal = GetSignal(positions[i] -> x);
+      positions[i]  -> x = (float) width  / 2 * boundSignal - 2 * boundSignal;
       velocities[i] -> x *= -(1 - collDamping);
     }
-    
-    if (positions[i] -> y >= (float) height / 2) {
-      positions[i]  -> y = (float) height / 2 * GetSignal(positions[i] -> y);
+    if (positions[i] -> y >= (float) height / 2 - 2) {
+      if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
+      float boundSignal = GetSignal(positions[i] -> y);
+      positions[i]  -> y = (float) height / 2 * boundSignal - 2 * boundSignal;
       velocities[i] -> y *= -(1 - collDamping);
     }
+  }
+}
+
+float SmoothingKernel(float distance, float radius) {
+  float circDist = fabs(radius - distance); 
+
+  float volume = PI * pow(radius, 4) / 2;
+  return pow(circDist, 3) / volume;
+}
+
+float SmoothingKernelDer(float distance, float radius) {
+  float circDist = fabs(radius - distance);
+
+  float volume = PI * pow(radius, 4) / 2;
+  return -3 * pow(circDist, 2) / volume;
+}
+
+float CalculateDensity(int particleIndex) {
+  // TODO: Consider underestimation of density on surface
+  float density = 0;
+  for (int j = 0; j <= numParticles; j++) {
+    if (particleIndex == j) continue;
+
+    Vector* distVector = CopyVector(positions[particleIndex]);
+    Mult(distVector, -1);
+    Sum(distVector, positions[j]);
+
+    float distance = Mag( distVector );
+    density += particleMass * SmoothingKernel(distance, smoothingLength);
+
+    free(distVector);
+  }
+
+  return density;
+}
+
+Vector* CalculatePressure(int particleIndex) {
+  Vector* totalPressure = NewVector(0, 0);
+
+  for (int j = 0; j < numParticles; j++) {
+    if (j == particleIndex) continue;
+
+    Vector* pressureVector = CopyVector(positions[particleIndex]);
+    Mult(pressureVector, -1);
+    Sum(pressureVector, positions[j]);
+
+    float distance      = Mag(pressureVector);
+    float pressureForce = densities[particleIndex] - densities[j] / 2;
+    
+    Mult(pressureVector, particleMass * pressureForce * pressureMult / (distance * densities[j]) * 
+                         SmoothingKernelDer(distance, smoothingLength));
+
+    Sum(totalPressure, pressureVector);
+  }
+  
+  return totalPressure;
+}
+
+void Fluidify() {
+  for (int i = 0; i < numParticles; i++) densities[i] = CalculateDensity(i);
+
+  for (int i = 0; i < numParticles; i++) {
+    Sum(velocities[i], gravity); // Gravity acceleration
+    
+    // Calculating pressure acceleration
+    Vector* pressure = CalculatePressure(i);
+    Mult(pressure, deltaTime / densities[i]);
+    Sum(velocities[i], pressure);
+
+    // Updating positions
+    Vector* velCopy = CopyVector(velocities[i]);
+    Mult(velCopy, deltaTime); 
+    Sum(positions[i], velCopy); 
+
+    free(pressure); free(velCopy);
   }
 }
 
 void Start() {
   printf("\x1b[2J");
 
+  gravity = NewVector(0, 0); Mult(gravity, deltaTime);
+
   // Displaying particles in grid
   int side = sqrt(numParticles);
   for (int i = 0; i < numParticles; i++) {
-    Vector* initialPoss = NewVector(i % side, i /  side);
-    Vector* initialVels = NewVector(0, 0);
+    positions[i]  = NewVector(i % side, i /  side);
+    velocities[i] = NewVector(0, 0);
 
-    Mult(initialPoss, initialDst);
-    Sum(initialPoss, &(Vector){ (float) (initialDst - side) / 2 , (float) (initialDst - side) / 2 });
+    Mult(positions[i], initialDst);
+    Sum(positions[i], &(Vector){ (float) (initialDst - side) / 2 , (float) (initialDst - side) / 2 });
+  }
+}
 
-    positions[i] = initialPoss;
-    velocities[i] = initialVels;
+void End() {
+  for (int i = 0; i < numParticles; i++) {
+    free(positions[i]); free(velocities[i]);
   }
 }
 
 void Update() {
   memset(buffer, backgroundASCII, width * height);
 
-  for (int i = 0; i < numParticles; i++) {
-    Sum(velocities[i], &(Vector){0, 200 * deltaTime} ); // Gravity acceleration
-   
-    Vector* posVar = velocities[i]; 
-    Mult(posVar, (double) deltaTime); 
-    Sum(positions[i], posVar); 
+  Fluidify();
+  CheckBoundCollisions();
 
+  // Buffer
+  for (int i = 0; i < numParticles; i++) {
+    // Updating buffer
     int x = (int) positions[i] -> x * 2 + (float) width  / 2;
     int y = (int) positions[i] -> y     + (float) height / 2; 
 
     int bufferIdx = x + y * width;
     if (bufferIdx < 0 || bufferIdx > width * height) continue;
 
-    //if (i == 0) printf("%f\n", velocities[i] -> y);
     buffer[bufferIdx] = densityASCII[0];
   }
 
-  CheckBoundCollisions();
-
-  // Drawing buffer
   printf("\x1b[H");
   for (int k = 0; k < width * height; k++) putchar(k % width ? buffer[k] : 10);
+  
+  usleep(deltaTime * powf(10, 6));
 }
 
 int main() {
   Start();
-
   while (true) Update();
+  End();
 
   return 0;
 }
