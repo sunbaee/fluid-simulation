@@ -46,6 +46,13 @@ void Sum(Vector* v1, Vector* v2) {
    v1 -> y += v2 -> y;
 }
 
+Vector* RandomDir() {
+  Vector* vector = NewVector((float) rand() / RAND_MAX, (float) rand() / RAND_MAX);
+  Mult(vector, 1 / Mag(vector));
+
+  return vector;
+}
+
 int GetSignal(float num) {
   if (num == 0) return 0;
   return num > 0 ? 1 : -1;
@@ -65,7 +72,7 @@ int GetSignal(float num) {
 
 #define smoothingLength 5 
 #define collDamping    .6
-#define velTolerance   10
+#define velTolerance    1
 #define pressureMult  200
 #define targetDensity   0
 
@@ -87,6 +94,7 @@ float initialDst = 1;
 
 void CheckBoundCollisions() {
   for (int i = 0; i < numParticles; i++) {
+  /* printf("%f\n", positions[i] -> x); */
     if (fabs(positions[i] -> x) >= (float) width / 4) {
       if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
 
@@ -150,7 +158,9 @@ Vector* CalculatePressure(int particleIndex) {
     Mult(pressureVector, -1);
     Sum(pressureVector, positions[j]);
 
-    float distance      = Mag(pressureVector);
+    float distance = Mag(pressureVector);
+    if (!distance) { pressureVector = RandomDir(); distance = 0.001; } 
+
     float pressureForce = (densities[particleIndex] - targetDensity) * pressureMult;
     
     Mult(pressureVector, particleMass * pressureForce / (distance * densities[j]) * 
