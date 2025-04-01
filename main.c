@@ -46,7 +46,7 @@ void Sum(Vector* v1, Vector* v2) {
    v1 -> y += v2 -> y;
 }
 
-int GetSignal(int num) {
+int GetSignal(float num) {
   if (num == 0) return 0;
   return num > 0 ? 1 : -1;
 }
@@ -55,18 +55,18 @@ int GetSignal(int num) {
 #define PI 3.14159265358979323846
 
 // Simulation variables
-#define width  44//160 
+#define width  160 
 #define height 44 
 
 #define deltaTime 1. / 60
 
-#define numParticles 100
+#define numParticles 1
 #define particleMass 1
 
 #define smoothingLength 5 
-#define collDamping    .6
+#define collDamping     0
 #define velTolerance   10
-#define pressureMult   20
+#define pressureMult  100
 #define targetDensity   0
 
 Vector* gravity;
@@ -80,23 +80,26 @@ float densities[numParticles];
 char buffer[width * height];
 
 // Characters drawn
-int densityASCII[] = { '@', '%', '8', '&', '#', '!', '*', ':', '.' };
+int densityASCII[] = { '.', '*', '#', '&', '8', '%', '@' };
 int backgroundASCII = ' ';
 
 float initialDst = 1;
 
 void CheckBoundCollisions() {
   for (int i = 0; i < numParticles; i++) {
-    if (positions[i] -> x >= (float) width / 2) {
+    /* printf("%f\n", positions[i] -> x); */
+
+    if (fabs(positions[i] -> x) >= (float) width / 2) {
       if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
 
       float boundSignal = GetSignal(positions[i] -> x);
 
       positions[i]  -> x = (float) width / 2 * boundSignal;
-      velocities[i] -> x *= collDamping - 1;
+      velocities[i] -> x *= 1 - collDamping;
     }
 
-    if (positions[i] -> y >= (float) height / 2) {
+    // TODO: correct x bound
+    if (fabs(positions[i] -> y) >= (float) height / 2) {
       if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
 
       float boundSignal = GetSignal(positions[i] -> y);
@@ -185,7 +188,7 @@ void Fluidify() {
 void Start() {
   printf("\x1b[2J");
 
-  gravity = NewVector(0, 50); Mult(gravity, deltaTime);
+  gravity = NewVector(50, 0); Mult(gravity, deltaTime);
 
   // Displaying particles in grid
   int side = sqrt(numParticles);
@@ -200,7 +203,7 @@ void Start() {
 
 void End() {
   for (int i = 0; i < numParticles; i++) {
-    free(positions[i]); free(velocities[i]);
+    free(positions[i]); free(velocities[i]); 
   }
 }
 
@@ -218,8 +221,14 @@ void Update() {
 
     int bufferIdx = x + y * width;
     if (bufferIdx < 0 || bufferIdx > width * height) continue;
+    if (buffer[bufferIdx] == backgroundASCII) {
+      buffer[bufferIdx] = densityASCII[0]; continue;
+    }
 
-    buffer[bufferIdx] = densityASCII[0];
+    for (int k = 0; k < 7; k++) {
+      if (buffer[bufferIdx] != densityASCII[k] || k == 7) continue;
+      buffer[bufferIdx] = densityASCII[k + 1]; break;
+    }
   }
 
   printf("\x1b[H");
