@@ -60,13 +60,13 @@ int GetSignal(float num) {
 
 #define deltaTime 1. / 60
 
-#define numParticles 1
+#define numParticles 200
 #define particleMass 1
 
 #define smoothingLength 5 
-#define collDamping     0
+#define collDamping    .6
 #define velTolerance   10
-#define pressureMult  100
+#define pressureMult  200
 #define targetDensity   0
 
 Vector* gravity;
@@ -87,18 +87,15 @@ float initialDst = 1;
 
 void CheckBoundCollisions() {
   for (int i = 0; i < numParticles; i++) {
-    /* printf("%f\n", positions[i] -> x); */
-
-    if (fabs(positions[i] -> x) >= (float) width / 2) {
+    if (fabs(positions[i] -> x) >= (float) width / 4) {
       if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
 
       float boundSignal = GetSignal(positions[i] -> x);
 
-      positions[i]  -> x = (float) width / 2 * boundSignal;
-      velocities[i] -> x *= 1 - collDamping;
+      positions[i]  -> x = (float) width / 4 * boundSignal;
+      velocities[i] -> x *= collDamping - 1;
     }
 
-    // TODO: correct x bound
     if (fabs(positions[i] -> y) >= (float) height / 2) {
       if (MagSqrd(velocities[i]) <= pow(velTolerance, 2)) Mult(velocities[i], 0);
 
@@ -188,7 +185,7 @@ void Fluidify() {
 void Start() {
   printf("\x1b[2J");
 
-  gravity = NewVector(50, 0); Mult(gravity, deltaTime);
+  gravity = NewVector(0, 50); Mult(gravity, deltaTime);
 
   // Displaying particles in grid
   int side = sqrt(numParticles);
