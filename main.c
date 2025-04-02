@@ -20,24 +20,18 @@ Vector* NewVector(double x, double y) {
 }
 
 // Returns memory copy of another vector
-Vector* CopyVector(Vector* vector) {
-  return NewVector(vector -> x, vector -> y);  
-}
+Vector* CopyVector(Vector* vector) { return NewVector(vector -> x, vector -> y); }
 
 // Calculates magnitude squared of a vector
-float MagSqrd(Vector* vec) {
-  return pow(vec -> x, 2) + pow(vec -> y, 2);
-}
+float MagSqrd(Vector* vec) { return pow(vec -> x, 2) + pow(vec -> y, 2); }
 
 // Calculates Magnitude of a vector
-float Mag(Vector* vec) {
-  return sqrt(MagSqrd(vec));
-}
+float Mag(Vector* vec) { return sqrt(MagSqrd(vec)); }
 
 // Multiplies a vector for a scalar.
-void Mult(Vector* v1, float number) {
-   v1 -> x *= number;
-   v1 -> y *= number;
+void Mult(Vector* vec, float number) {
+   vec -> x *= number;
+   vec -> y *= number;
 }
 
 // Sums a vector to another.
@@ -46,16 +40,18 @@ void Sum(Vector* v1, Vector* v2) {
    v1 -> y += v2 -> y;
 }
 
-Vector* RandomDir() {
-  Vector* vector = NewVector((float) rand() / RAND_MAX, (float) rand() / RAND_MAX);
-  Mult(vector, 1 / Mag(vector));
-
-  return vector;
-}
-
 int GetSignal(float num) {
   if (num == 0) return 0;
   return num > 0 ? 1 : -1;
+}
+
+float Random() { return (float) rand() / RAND_MAX * 2 - 1; }
+
+Vector* RandomDir() {
+  Vector* vector = NewVector(Random(), Random());
+  Mult(vector, 1 / Mag(vector));
+
+  return vector;
 }
 
 // Constant definitions
@@ -67,14 +63,14 @@ int GetSignal(float num) {
 
 #define deltaTime 1. / 60
 
-#define numParticles 200
+#define numParticles 100
 #define particleMass 1
 
-#define smoothingLength 5 
-#define collDamping    .6
-#define velTolerance    1
-#define pressureMult  200
-#define targetDensity   0
+#define smoothingLength 20
+#define collDamping     .6
+#define velTolerance     1
+#define pressureMult   200
+#define targetDensity  7.1
 
 Vector* gravity;
 
@@ -155,20 +151,21 @@ Vector* CalculatePressure(int particleIndex) {
     if (j == particleIndex) continue;
 
     Vector* pressureVector = CopyVector(positions[particleIndex]);
-    Mult(pressureVector, -1);
-    Sum(pressureVector, positions[j]);
+    Mult(pressureVector, -1); Sum(pressureVector, positions[j]);
 
     float distance = Mag(pressureVector);
-    if (!distance) { pressureVector = RandomDir(); distance = 0.001; } 
+    if (!distance) pressureVector = RandomDir(); else Mult(pressureVector, 1 / distance);
 
-    float pressureForce = (densities[particleIndex] - targetDensity) * pressureMult;
+    float currPressureForce   = ( densities[particleIndex] - targetDensity ) * pressureMult;
+    float targetPressureForce = ( densities[j] - targetDensity ) * pressureMult;
+    float sharedPressure      = ( currPressureForce + targetPressureForce ) / 2;
     
-    Mult(pressureVector, particleMass * pressureForce / (distance * densities[j]) * 
+    Mult(pressureVector, particleMass * sharedPressure / densities[j] * 
                          SmoothingKernelDer(distance, smoothingLength));
 
     Sum(totalPressure, pressureVector);
   }
-  
+
   return totalPressure;
 }
 
@@ -177,7 +174,9 @@ void Fluidify() {
 
   for (int i = 0; i < numParticles; i++) {
     Sum(velocities[i], gravity); // Gravity acceleration
-    
+  }
+
+  for (int i = 0; i < numParticles; i++) {
     // Calculating pressure acceleration
     Vector* pressure = CalculatePressure(i);
     Mult(pressure, deltaTime / densities[i]);
@@ -195,17 +194,24 @@ void Fluidify() {
 void Start() {
   printf("\x1b[2J");
 
-  gravity = NewVector(0, 50); Mult(gravity, deltaTime);
+  gravity = NewVector(0, 0); Mult(gravity, deltaTime);
 
-  // Displaying particles in grid
-  int side = sqrt(numParticles);
+  // Filling memory with velocities
+  for (int i = 0; i < numParticles; i++) velocities[i] = NewVector(0, 0); 
+
+  // Displaying particles randomly
   for (int i = 0; i < numParticles; i++) {
-    positions[i]  = NewVector(i % side, i /  side);
-    velocities[i] = NewVector(0, 0);
-
-    Mult(positions[i], initialDst);
-    Sum(positions[i], &(Vector){ (float) (initialDst - side) / 2 , (float) (initialDst - side) / 2 });
+    positions[i] = NewVector(Random() * width / 4, Random() * height / 2);
   }
+
+  /* // Displaying particles in grid */
+  /* int side = sqrt(numParticles); */
+  /* for (int i = 0; i < numParticles; i++) { */
+  /*   positions[i]  = NewVector(i % side, i / side); */
+  /**/
+  /*   Mult(positions[i], initialDst); */
+  /*   Sum(positions[i], &(Vector){ (float) (initialDst - side) / 2 , (float) (initialDst - side) / 2 }); */
+  /* } */
 }
 
 void End() {
